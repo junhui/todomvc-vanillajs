@@ -1,4 +1,4 @@
-# Vanilla JavaScript TodoMVC Example
+# Vanilla JavaScript TodoMVC Example [![Build Status](https://travis-ci.org/junhui/todomvc-vanillajs.svg?branch=master)](https://travis-ci.org/junhui/todomvc-vanillajs)
 
 > JavaScript® (often shortened to JS) is a lightweight, interpreted, object-oriented language with first-class functions, most known as the scripting language for Web pages, but used in many non-browser environments as well such as node.js or Apache CouchDB.
 
