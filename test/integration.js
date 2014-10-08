@@ -2,161 +2,127 @@
 
 var assert = require('assert');
 
-var webdriver = require('selenium-webdriver');
-var chrome = require('selenium-webdriver/chrome');
-var chromeDriver = require('selenium-chromedriver');
+var TodoDriver = require('./todo-driver');
+var locators = require('./make-locators')(require('./locators.json'));
 
 var port = process.env.NODE_TEST_PORT || 8002;
 
 before(function(done) {
   require('./server')(__dirname + '/..', port, done);
-  chrome.setDefaultService(
-    new chrome.ServiceBuilder(chromeDriver.path).build()
-  );
+  this.todoDriver = new TodoDriver();
 });
 
 beforeEach(function() {
-  var timeout = 20000;
-  var driver = this.driver = new webdriver.Builder()
-    .withCapabilities(webdriver.Capabilities.chrome())
-    .build();
-
-  this.timeout(timeout);
-
-  driver.manage().timeouts().implicitlyWait(1000);
-
-  return driver.get('http://localhost:' + port);
+  this.timeout(10 * 1000);
+  return this.todoDriver.start('http://localhost:' + port);
 });
 
 afterEach(function() {
-  return this.driver.quit();
+  return this.todoDriver.quit();
 });
 
-describe('Creation', function(done) {
-  beforeEach(function() {
-    return this.driver.findElement(webdriver.By.css('#new-todo'))
-      .sendKeys('buy stapler', webdriver.Key.ENTER);
-  });
-
-  it('appends a list item', function() {
-    return this.driver.findElement(webdriver.By.css('#todo-list li'))
-      .getText()
-      .then(function(text) {
-        assert.equal(text, 'buy stapler');
-      });
-  });
-
-  it('updates the remaining item count', function() {
-    return this.driver.findElement(webdriver.By.css('#todo-count'))
-      .getText()
-      .then(function(text) {
-        assert(/1\s+item\s+left/i.test(text));
-      });
-  });
-
-  it('persists tasks across page refreshes', function() {
-    var driver = this.driver;
-
-    return this.driver.getCurrentUrl()
-      .then(function(url) {
-        return driver.get(url);
-      }).then(function() {
-        driver.findElement(webdriver.By.css('#todo-list li'))
-          .getText()
-          .then(function(text) {
-            assert.equal(text, 'buy stapler');
-          });
-      });
+it('visits the web application', function() {
+  return this.todoDriver.getTitle().then(function(title) {
+    assert.equal(title, 'VanillaJS • TodoMVC');
   });
 });
-
-describe('Deletion', function() {
+describe('item creation', function() {
   beforeEach(function() {
-    var driver = this.driver;
-
-    return driver.findElement(webdriver.By.css('#new-todo'))
-      .sendKeys('buy stapler', webdriver.Key.ENTER)
-      .then(function() {
-        return driver.findElement(webdriver.By.css('#todo-list li'))
-          .then(function(elem) {
-            return driver.actions()
-              .mouseMove(elem)
-              .perform()
-              .then(function() {
-                return elem;
-              });
-          }).then(function(elem) {
-            return elem.findElement(webdriver.By.css('.destroy'))
-              .click();
-          });
-      });
+    return this.todoDriver.create('order new SSD');
   });
 
-  it('removes the list item', function() {
-    return this.driver.isElementPresent(webdriver.By.css('#todo-list li'))
-      .then(function(isPresent) {
-        assert(!isPresent);
-      });
-  });
-
-  it('hides the remaining item count', function() {
-    return this.driver.findElement(webdriver.By.css('#todo-count'))
-      .isDisplayed()
-      .then(function(isDisplayed) {
-        assert(!isDisplayed);
-      });
-  });
-});
-
-describe('Updating', function() {
-  beforeEach(function() {
-    var ctx = this;
-
-    return this.driver.findElement(webdriver.By.css('#new-todo'))
-      .sendKeys('buy stapler', webdriver.Key.ENTER)
-      .then(function() {
-        return ctx.driver.findElement(webdriver.By.css('#todo-list li label'));
-      })
-      .then(function(elem) {
-        ctx.newTodo = elem;
-      });
-  });
-
-  it('supports task name modification', function() {
-    var driver = this.driver;
-
-    return driver.actions()
-      .doubleClick(this.newTodo)
-      .sendKeys(webdriver.Key.BACK_SPACE, 'e', webdriver.Key.ENTER)
-      .perform()
-      .then(function() {
-        return driver.findElement(webdriver.By.css('#todo-list li label'))
-          .getText();
-      }).then(function(text) {
-        assert.equal(text, 'buy staplee');
-      });
-  });
-
-  describe('task completion', function() {
-    beforeEach('supports task completion', function() {
-      var driver = this.driver;
-
-      return this.driver.findElement(webdriver.By.css('.toggle'))
-        .click()
-        .then(function() {
-          return driver.isElementPresent(webdriver.By.css('.completed'))
-            .then(function(isPresent) {
-              assert(isPresent);
-            });
-        });
+  it('appends new list items to Todo list', function() {
+    return this.todoDriver.readItems(0).then(function(text) {
+      assert.equal(text, 'order new SSD');
     });
+  });
+  it('appends new list items to Todo list', function() {
+    var todoDriver = this.todoDriver;
 
-    it('updates the remaining item count', function() {
-      return this.driver.findElement(webdriver.By.css('#todo-count'))
-        .getText()
-        .then(function(text) {
-          assert(/^\s*0 items left\s*$/i, text);
-        });
+    return this.todoDriver.create('this is a new one')
+      .then(function() {
+        return todoDriver.readItems(1);
+      }).then(function(text) {
+        assert.equal(text, 'this is a new one');
+      });
+  });
+  it('updates the "Remaining Items" counter', function() {
+    return this.todoDriver.readText(locators.todoCount)
+      .then(function(text) {
+        var remainingRe = /(\d+)/;
+        var match = text.match(remainingRe);
+        assert(match, '"Remining Items" contains a number');
+        assert.equal(match[1], '1');
+      });
+
+  });
+});
+describe('item deletion', function() {
+  beforeEach(function() {
+    var todoDriver = this.todoDriver;
+
+    return this.todoDriver.create('order new SSD')
+      .then(function() {
+        return todoDriver.delete(0);
+      });
+  });
+  it('removes list item from Todo list', function() {
+    return this.todoDriver.countItems()
+      .then(function(itemCount) {
+        assert.equal(itemCount, 0);
+      });
+  });
+
+  it('hides the "Remaining Items" counter when no items remain', function() {
+    return this.todoDriver.userCanSee(locators.todoCount)
+      .then(function(userCanSee) {
+        assert(!userCanSee);
+      });
+  });
+});
+describe('item modification', function() {
+  beforeEach(function() {
+    return this.todoDriver.create('order new SSD');
+  });
+  it('supports task name modification', function() {
+    return this.todoDriver.edit(0, '...now')
+      .then(function(text) {
+        assert.equal(text, 'order new SSD...now');
+      });
+  });
+});
+
+describe('congrats', function() {
+  beforeEach(function() {
+    var todoDriver = this.todoDriver;
+    return todoDriver.create('first').then(function() {
+      return todoDriver.create('second');
+    }).then(function() {
+      return todoDriver.create('third');
+    }).then(function() {
+      return todoDriver.complete(2);
+    }).then(function() {
+      return todoDriver.complete(0);
+    }).then(function() {
+      return todoDriver.isCongratulating();
+    }).then(function(isCongratulating) {
+      assert.equal(isCongratulating, false);
+    });
+  });
+  it('should congratulate user when they complete last item', function() {
+    var todoDriver = this.todoDriver;
+    return todoDriver.complete(1).then(function() {
+      return todoDriver.isCongratulating();
+    }).then(function(isCongratulating) {
+      assert(isCongratulating);
+    });
+  });
+  it('should congratulate user when they remove the last item', function() {
+    var todoDriver = this.todoDriver;
+    return todoDriver.delete(1).then(function() {
+      return todoDriver.isCongratulating();
+    }).then(function(isCongratulating) {
+      assert(isCongratulating);
     });
   });
 });
