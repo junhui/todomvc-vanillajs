@@ -7,8 +7,15 @@ var locators = require('./make-locators')(require('./locators.json'));
 
 var port = process.env.NODE_TEST_PORT || 8002;
 
+var screenshotFolder = 'outputscreenshot';
+
 before(function(done) {
   require('./server')(__dirname + '/..', port, done);
+  var fs = require('fs');
+
+  if (!fs.existsSync(screenshotFolder)) {
+    fs.mkdir(screenshotFolder);
+  }
   this.todoDriver = new TodoDriver();
 });
 
@@ -18,6 +25,14 @@ beforeEach(function() {
 });
 
 afterEach(function() {
+  var test = this.currentTest;
+  var safeName, fileName;
+  if (test.state === 'passed') {
+    //return;
+  }
+  safeName = test.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  fileName = screenshotFolder + '/' + safeName + (new Date()).toISOString() + '.png';
+  this.todoDriver.takeScreenshot(fileName);
   return this.todoDriver.quit();
 });
 

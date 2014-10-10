@@ -1,20 +1,31 @@
 'use strict';
 var webdriver = require('selenium-webdriver');
 var chrome = require('selenium-webdriver/chrome');
-var chromeDriver = require('selenium-chromedriver');
+var chromeDriver = require('chromedriver');
 var locators = require('./make-locators')(require('./locators.json'));
 
 function TodoDriver() {
   chrome.setDefaultService(
     new chrome.ServiceBuilder(chromeDriver.path).build()
   );
+  // Use webdriverjs to create a Selenium Client
+  // var client = require('webdriverjs').remote({
+  //     desiredCapabilities: {
+  //             // You may choose other browsers
+  //                     // http://code.google.com/p/selenium/wiki/DesiredCapabilities
+  //                             browserName: 'phantomjs'
+  //                                 },
+  //                                     // webdriverjs has a lot of output which is generally useless
+  //                                         // However, if anything goes wrong, remove this to see more details
+  //                                             logLevel: 'silent'
+  //                                             });
 }
 
 module.exports = TodoDriver;
 
 TodoDriver.prototype.start = function(url){
  this.seleniumDriver = new webdriver.Builder()
-    .withCapabilities(webdriver.Capabilities.chrome())
+    .withCapabilities(webdriver.Capabilities.firefox())
     .build();
   return this.seleniumDriver.get(url);
 };
@@ -157,5 +168,24 @@ webdriver.WebDriver.prototype.userCanSee = function(locator) {
         .then(function(el) {
           return el.isDisplayed();
         });
+    });
+};
+TodoDriver.prototype.takeScreenshot = function(fileName) {
+  return this.seleniumDriver.saveScreenshot(fileName);
+};
+var writeFile = require('fs').writeFile;
+webdriver.WebDriver.prototype.saveScreenshot = function(fileName) {
+  return this.takeScreenshot()
+    .then(function(data) {
+      var dfd = webdriver.promise.defer();
+      var dataWithoutType = data.replace(/^data:image\/png;base64,/, '');
+      writeFile(fileName, dataWithoutType, 'base64', function(err) {
+        if (err) {
+          dfd.reject(err);
+          return;
+        }
+        dfd.fulfill();
+      });
+      return dfd.promise;
     });
 };
